@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Quantum Fluid Topology</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #020205;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="core"></canvas>
+    <script>
+        const canvas = document.getElementById('core');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        let width, height, cx, cy;
+        let time = 0;
+        const particles = [];
+        const PARTICLE_COUNT = 4000;
+        
+        class Particle {
+            constructor() {
+                this.reset();
+                this.t = Math.random() * Math.PI * 2;
+                this.offset = Math.random() * Math.PI * 2;
+            }
+            
+            reset() {
+                this.p = Math.random() * Math.PI * 2;
+                this.q = Math.random() * Math.PI * 2;
+                this.speed = 0.002 + Math.random() * 0.003;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.rad = Math.random() * 40 + 10;
+            }
+
+            update(mouseX, mouseY) {
+                this.t += this.speed;
+                
+                // Torus Knot Kinematics
+                const R = 220;
+                const r = 90;
+                const p_knot = 3;
+                const q_knot = 7;
+                
+                const tx = (R + r * Math.cos(q_knot * this.t)) * Math.cos(p_knot * this.t);
+                const ty = (R + r * Math.cos(q_knot * this.t)) * Math.sin(p_knot * this.t);
+                const tz = r * Math.sin(q_knot * this.t);
+                
+                // Superposition of wave functions
+                const waveX = Math.cos(this.offset + time * 2) * this.rad;
+                const waveY = Math.sin(this.offset + time * 1.5) * this.rad;
+                const waveZ = Math.cos(this.offset - time) * this.rad;
+
+                const nx = tx + waveX;
+                const ny = ty + waveY;
+                const nz = tz + waveZ;
+
+                // 3D Rotations (Euler angles)
+                const rotX = time * 0.4 + (mouseY - cy) * 0.002;
+                const rotY = time * 0.3 + (mouseX - cx) * 0.002;
+                
+                // Apply Y rotation
+                const cx_rot = nx * Math.cos(rotY) - nz * Math.sin(rotY);
+                const cz_rot = nx * Math.sin(rotY) + nz * Math.cos(rotY);
+                
+                // Apply X rotation
+                const cy_rot = ny * Math.cos(rotX) - cz_rot * Math.sin(rotX);
+                const fz = cz_rot * Math.cos(rotX) + ny * Math.sin(rotX);
+
+                // Perspective projection
+                const perspective = 1000;
+                const scale = perspective / (perspective + fz);
+                
+                this.x2d = cx + cx_rot * scale * 1.5;
+                this.y2d = cy + cy_rot * scale * 1.5;
+                this.scale = scale;
+                this.hue = (this.t * 80 + fz * 0.5 + time * 50) % 360;
+            }
+
+            draw() {
+                if (this.scale > 0.1) {
+                    ctx.fillStyle = `hsla(${this.hue}, 90%, 65%, ${this.scale * 0.8})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x2d, this.y2d, this.size * this.scale * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+
+        function init() {
+            window.addEventListener('resize', resize);
+            window.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+            
+            window.addEventListener('touchmove', (e) => {
+                mouseX = e.touches[0].clientX;
+                mouseY = e.touches[0].clientY;
+            });
+
+            resize();
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle());
+            }
+            animate();
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+
+        function animate() {
+            // Motion blur effect
+            ctx.fillStyle = 'rgba(2, 2, 5, 0.12)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Composite operation for glowing effect
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Z-buffer sorting pseudo-simulation
+            particles.sort((a, b) => a.scale - b.scale);
+
+            particles.forEach(p => {
+                p.update(mouseX, mouseY);
+                p.draw();
+            });
+            
+            ctx.globalCompositeOperation = 'source-over';
+            time += 0.008;
+            
+            requestAnimationFrame(animate);
+        }
+
+        init();
+    </script>
+</body>
+</html>
